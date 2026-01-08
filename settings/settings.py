@@ -16,6 +16,7 @@ class MITMType(Enum):
     RIICHI_CITY = "riichi_city"
     TENHOU = "tenhou"
     UNIFIED = "unified"
+    JPMaj = "jpmaj"
 
 @dataclasses.dataclass
 class ServiceConfig:
