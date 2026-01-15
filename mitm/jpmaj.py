@@ -56,7 +56,7 @@ class JpMahjongRoom():
 # Because in Majsouls, every flow's message has an id, we need to use one bridge for each flow
 gRoomMap: dict[int, JpMahjongRoom] = {} # store all flow.id -> MajsoulBridge
 mjai_messages: queue.Queue[dict] = queue.Queue() # store all messages
-
+isStopping= False
 nsq_receiver:JpMahjongNsqReceiver=None
 debug_uid=0
 timeout_seconds = 3 * 60  # 3分钟超时
@@ -188,12 +188,13 @@ def on_room_new_message(message):
 def on_room_robot_message(message):
     """处理NSQ消息 - 同步handler"""
     try:
+        global isStopping
         # 解码消息体
         body = message.body
         mjai_message = json.loads(body.decode('utf-8'))
         logger.debug(f"Received MJAI message: {mjai_message}")
         type_val = mjai_message.get("Type")
-        if type_val == "create_game":
+        if not isStopping and type_val == "create_game":
             on_room_new_message(mjai_message.get("Data"))
             return
         

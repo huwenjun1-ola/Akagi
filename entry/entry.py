@@ -8,7 +8,7 @@ import os
 from .logger import logger
 import time
 from settings.settings import settings, MITMType
-from mitm.jpmaj import start_proxy, stop_proxy, mjai_messages
+from mitm.jpmaj import start_proxy, stop_proxy, mjai_messages,gRoomMap,isStopping
 
 os.environ["LOGURU_AUTOINIT"] = "False"
 
@@ -20,6 +20,10 @@ class Application:
     def signal_handler(self, signum, frame):
         """处理信号的回调函数"""
         logger.info(f"Received signal {signum}, shutting down gracefully...")
+        global isStopping
+        isStopping=True
+        while gRoomMap :
+            time.sleep(10)
         stop_proxy()
         logger.info("Akagi stopped")
         sys.exit(0)
