@@ -52,6 +52,7 @@ class Application:
         signal.signal(signal.SIGHUP, self.signal_handler)
         _thread = threading.Thread(
             target=lambda: asyncio.run(start_proxy(settings.mitm.host, settings.mitm.port)))
+        _thread.daemon = True
         _thread.start()
         #  在这里阻塞 - 实现持续运行和信号检测
         while True:
