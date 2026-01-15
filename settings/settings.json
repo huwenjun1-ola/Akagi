@@ -1,8 +1,8 @@
 {
     "mitm": {
-        "type": "majsoul",
-        "host": "127.0.0.1",
-        "port": 7880
+        "type": "jpmaj",
+        "host": "1/192.168.11.46",
+        "port": 4150
     },
     "model": "mortal",
     "theme": "textual-dark",

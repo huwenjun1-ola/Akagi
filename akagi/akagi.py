@@ -720,6 +720,7 @@ class Recommendations(Vertical):
                 recommend.update_recommendation(recommends[i])
             else:
                 recommend.clear_recommendation()
+        logger.debug(f"recommends <- {recommends[:self.RECOMMENDATION_COUNT]}")
 
 class BestAction(Horizontal):
     # TODO: When action is None, fails to update

@@ -42,6 +42,8 @@ class AutoPlay(object):
                 return
             case MITMType.UNIFIED:
                 return
+            case MITMType.JPMaj:
+                return
             case _:
                 logger.error(f"Unknown MITM type: {settings.mitm.type}")
                 return
