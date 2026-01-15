@@ -8,7 +8,7 @@ import os
 from .logger import logger
 import time
 from settings.settings import settings, MITMType
-from mitm.jpmaj import start_proxy, stop_proxy, mjai_messages,gRoomMap,isStopping
+from mitm.jpmaj import start_proxy, stop_proxy, mjai_messages,gRoomManager,room_manager_lock
 
 os.environ["LOGURU_AUTOINIT"] = "False"
 
@@ -20,10 +20,29 @@ class Application:
     def signal_handler(self, signum, frame):
         """处理信号的回调函数"""
         logger.info(f"Received signal {signum}, shutting down gracefully...")
-        global isStopping
-        isStopping=True
-        while gRoomMap :
-            time.sleep(10)
+        global gRoomManager
+        with room_manager_lock:
+            gRoomManager.isStopping=True
+        
+        # 等待gRoomMap变空，最多等待5分钟
+        timeout = 1800  # 30分钟超时
+        start_time = time.time()
+        while True:
+            # 使用锁保护读取gRoomMap的长度
+            with room_manager_lock:
+                room_count = len(gRoomManager.gRoomMap)
+            
+            if room_count == 0:
+                logger.info("All rooms cleaned up, shutting down...")
+                break
+            
+            if time.time() - start_time > timeout:
+                logger.warning(f"Timeout reached, {room_count} rooms still active, forcing shutdown...")
+                break
+            
+            logger.info(f"Waiting for {room_count} rooms to clean up...")
+            time.sleep(5)  # 减少睡眠时间，增加检查频率
+        
         stop_proxy()
         logger.info("Akagi stopped")
         sys.exit(0)

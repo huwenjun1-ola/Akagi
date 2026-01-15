@@ -52,11 +52,16 @@ class JpMahjongRoom():
                 del self.jpmaj_bridges[uid]
                 logger.info(f"销毁房间 {self.room_id} 的用户 {uid}")
 
+class RoomManager():
+    def __init__(self):
+        self.gRoomMap: dict[int, JpMahjongRoom] = {}
+        self.isStopping = False
 
+# 全局锁用于保护gRoomManager的并发访问
+room_manager_lock = threading.Lock()
+gRoomManager=RoomManager()
 # Because in Majsouls, every flow's message has an id, we need to use one bridge for each flow
-gRoomMap: dict[int, JpMahjongRoom] = {} # store all flow.id -> MajsoulBridge
 mjai_messages: queue.Queue[dict] = queue.Queue() # store all messages
-isStopping= False
 nsq_receiver:JpMahjongNsqReceiver=None
 debug_uid=0
 timeout_seconds = 3 * 60  # 3分钟超时
@@ -69,18 +74,20 @@ async def check_room_timeout():
         try:
             rooms_to_destroy = []
             
-            # 检查所有房间
-            for room_id, room in gRoomMap.items():
-                room.check_destroy()
-                if not room.jpmaj_bridges:
-                    rooms_to_destroy.append(room_id)
-            
-            # 销毁超时的房间
-            for room_id in rooms_to_destroy:
-                if room_id in gRoomMap:
-                    logger.info(f"房间 {room_id} 超时超过3分钟，正在销毁...")
-                    del gRoomMap[room_id]
-                    logger.info(f"房间 {room_id} 已销毁")
+            # 使用锁保护读取gRoomMap
+            with room_manager_lock:
+                # 检查所有房间
+                for room_id, room in gRoomManager.gRoomMap.items():
+                    room.check_destroy()
+                    if not room.jpmaj_bridges:
+                        rooms_to_destroy.append(room_id)
+                
+                # 销毁超时的房间
+                for room_id in rooms_to_destroy:
+                    if room_id in gRoomManager.gRoomMap:
+                        logger.info(f"房间 {room_id} 超时超过3分钟，正在销毁...")
+                        del gRoomManager.gRoomMap[room_id]
+                        logger.info(f"房间 {room_id} 已销毁")
             
             # 每30秒检查一次
             await asyncio.sleep(30)
@@ -172,7 +179,7 @@ def on_room_new_message(message):
         mjai_message=RoomNewMessage.from_dict( message)
         logger.debug(f"on_room_new_message Received MJAI message: {mjai_message}")
         room=JpMahjongRoom(mjai_message.Rid)
-        gRoomMap[mjai_message.Rid]=room
+        gRoomManager.gRoomMap[mjai_message.Rid]=room
         for obj in mjai_message.Robots:
             jpmaj_bridge = JpMahjongBridge()
             jpmaj_bridge.seat=obj.Seat
@@ -188,21 +195,23 @@ def on_room_new_message(message):
 def on_room_robot_message(message):
     """处理NSQ消息 - 同步handler"""
     try:
-        global isStopping
         # 解码消息体
         body = message.body
         mjai_message = json.loads(body.decode('utf-8'))
         logger.debug(f"Received MJAI message: {mjai_message}")
         type_val = mjai_message.get("Type")
-        if not isStopping and type_val == "create_game":
-            on_room_new_message(mjai_message.get("Data"))
+        if  type_val == "create_game":
+            with room_manager_lock:
+                if  not gRoomManager.isStopping:
+                    on_room_new_message(mjai_message.get("Data"))
             return
         
+        # 使用锁保护读取gRoomMap
         rid = mjai_message.get("Rid")
-        if rid not in gRoomMap:
+        if rid not in gRoomManager.gRoomMap:
             return
-        
-        room = gRoomMap[rid]
+
+        room = gRoomManager.gRoomMap[rid]
         if room is not None:
             room.OnMsg(mjai_message)
 
